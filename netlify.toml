@@ -1,0 +1,50 @@
+import { getStore } from '@netlify/blobs';
+
+const STORE_NAME = 'lb-bau-team-state';
+const DEFAULT_TEAM = 'LB-gb';
+
+export default async (req) => {
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'content-type',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+  };
+
+  if (req.method === 'OPTIONS') return new Response('', { status: 204, headers });
+
+  const url = new URL(req.url);
+  const team = (url.searchParams.get('team') || DEFAULT_TEAM).trim();
+  const store = getStore(STORE_NAME);
+
+  try {
+    if (req.method === 'GET') {
+      const entry = await store.getWithMetadata(team, { type: 'json', consistency: 'strong' });
+      if (entry === null) return new Response(JSON.stringify({ team, stamp: '', bundle: null }), { status: 200, headers });
+      return new Response(JSON.stringify({ team, stamp: entry.etag || '', bundle: entry.data || null, metadata: entry.metadata || {} }), { status: 200, headers });
+    }
+
+    if (req.method === 'POST') {
+      const body = await req.json();
+      const bundle = body?.bundle ?? null;
+      const stamp = (body?.stamp || '').trim();
+      const by = (body?.by || '').trim();
+      if (!bundle) return new Response(JSON.stringify({ error: 'Missing bundle' }), { status: 400, headers });
+
+      const options = { metadata: { updatedAt: new Date().toISOString(), updatedBy: by } };
+      if (stamp) options.onlyIfMatch = stamp;
+
+      try {
+        const result = await store.setJSON(team, bundle, options);
+        const newStamp = result?.etag || stamp;
+        return new Response(JSON.stringify({ ok: true, team, stamp: newStamp }), { status: 200, headers });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'Conflict', team }), { status: 409, headers });
+      }
+    }
+
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500, headers });
+  }
+};

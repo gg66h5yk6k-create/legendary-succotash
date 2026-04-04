@@ -1,1 +1,6 @@
-# legendary-succotash
+[build]
+  publish = "."
+  command = "npm run build"
+
+[functions]
+  directory = "netlify/functions"
