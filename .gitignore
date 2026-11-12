@@ -2,3 +2,8 @@
 .netlify/*
 !.netlify/state.json
 node_modules/
+
+dist/
+!.netlify/features/
+.netlify/features/*
+!.netlify/features/netlify-identity
