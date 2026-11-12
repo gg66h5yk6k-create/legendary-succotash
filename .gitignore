@@ -1,0 +1,9 @@
+# Ignore generated Netlify files; retain the explicit project association.
+.netlify/*
+!.netlify/state.json
+node_modules/
+
+dist/
+!.netlify/features/
+.netlify/features/*
+!.netlify/features/netlify-identity
