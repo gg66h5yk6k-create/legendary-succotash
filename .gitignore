@@ -1,0 +1,4 @@
+# Ignore generated Netlify files; retain the explicit project association.
+.netlify/*
+!.netlify/state.json
+node_modules/
