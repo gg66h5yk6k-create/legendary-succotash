@@ -183,5 +183,14 @@ export function initAccount({ $, t, getDocument, applyDocument }) {
     finally { authBusy = false; refreshUI(); }
   }
   void initialize();
-  return { changed, refreshUI };
+  return { changed, refreshUI, flush: save, isReady: () => loaded && !!user,
+    request: async (path, options = {}) => {
+      if (!loaded || !user) throw new Error('Not signed in');
+      const run = generation;
+      const response = await fetch(path, { ...options, credentials: 'same-origin', cache: 'no-store', headers: { 'X-Account-ID': user.id } });
+      if (run !== generation) throw new Error('Account changed');
+      if (!response.ok) { if (response.status === 401) setState('loginExpired'); throw Object.assign(new Error('Request failed'), { status: response.status }); }
+      return response;
+    },
+  };
 }

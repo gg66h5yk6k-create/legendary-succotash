@@ -1,6 +1,9 @@
+import { getStore } from '@netlify/blobs';
+import { createHash } from 'node:crypto';
+import { createAttachmentHandler } from './attachments.mjs';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../../db/index.ts';
-import { resumes } from '../../db/schema.ts';
+import { resumes, attachments } from '../../db/schema.ts';
 import { createHandler } from './handler.mjs';
 
 async function authenticate(request) {
@@ -31,5 +34,19 @@ const store = {
     return row;
   },
 };
-export default createHandler({ authenticate, store });
+const resumeHandler = createHandler({ authenticate, store });
+const records = {
+  list: userId => db.select({ id: attachments.id, name: attachments.name, contentType: attachments.contentType, size: attachments.size }).from(attachments).where(eq(attachments.userId, userId)).orderBy(attachments.createdAt, attachments.id),
+  get: async (userId, id) => (await db.select().from(attachments).where(and(eq(attachments.userId, userId), eq(attachments.id, id))).limit(1))[0],
+  add: row => db.insert(attachments).values(row),
+  remove: (userId, id) => db.delete(attachments).where(and(eq(attachments.userId, userId), eq(attachments.id, id))),
+};
+const namespace = process.env.CONTEXT === 'production' ? 'application-files' : `application-files-${createHash('sha256').update(process.env.NETLIFY_DB_BRANCH || process.env.BRANCH || process.env.CONTEXT || 'dev').digest('hex').slice(0, 20)}`;
+// Immediate downloads after upload require strong consistency.
+const attachmentHandler = createAttachmentHandler({ authenticate, records, files: {
+  get: (...args) => getStore({ name: namespace, consistency: 'strong' }).get(...args),
+  set: (...args) => getStore({ name: namespace, consistency: 'strong' }).set(...args),
+  delete: (...args) => getStore({ name: namespace, consistency: 'strong' }).delete(...args),
+} });
+export default request => new URL(request.url).pathname.startsWith('/api/attachments') ? attachmentHandler(request) : resumeHandler(request);
 export const config = { path: '/api/*' };

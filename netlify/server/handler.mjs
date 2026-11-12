@@ -15,7 +15,21 @@ export function validateDocument(input) {
     if (values[key] && (!/^\d+$/.test(values[key]) || +values[key] < min || +values[key] > max)) return null;
   }
   if (values.day && values.month && values.year && new Date(+values.year, +values.month - 1, +values.day).getMonth() !== +values.month - 1) return null;
-  return { values, language: input.language, step: input.step };
+  const output = { values, language: input.language, step: input.step };
+  if (input.portfolio !== undefined) {
+    const portfolio = input.portfolio;
+    if (!portfolio || typeof portfolio !== 'object' || Array.isArray(portfolio)) return null;
+    const allowed = new Set(['position', 'company', 'recipient', 'address', 'place', 'date', 'subject', 'salutation', 'body', 'closing', 'signature']);
+    const cleaned = {};
+    for (const [key, value] of Object.entries(portfolio)) {
+      if (key === 'includeCover' || key === 'includeLetter') { if (typeof value !== 'boolean') return null; }
+      else if (!allowed.has(key) || typeof value !== 'string' || value.length > (key === 'body' ? 20000 : 1000)) return null;
+      if (key === 'date' && value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)))) return null;
+      cleaned[key] = value;
+    }
+    output.portfolio = cleaned;
+  }
+  return output;
 }
 
 export function createHandler({ authenticate, store }) {
@@ -33,7 +47,7 @@ export function createHandler({ authenticate, store }) {
         return json(row || { document: null, version: 0 });
       }
       const text = await request.text();
-      if (text.length > 150000) return json({ error: 'too_large' }, 413);
+      if (text.length > 200000) return json({ error: 'too_large' }, 413);
       let body;
       try { body = JSON.parse(text); } catch { return json({ error: 'invalid_document' }, 400); }
       const document = validateDocument(body.document);
